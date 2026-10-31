@@ -1,0 +1,109 @@
+name: Build and release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+env:
+  BINARY_NAME: generate_passwd
+  RELEASE_TAG: release-${{ github.run_number }}
+  RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+
+jobs:
+  build:
+    if: github.event.pull_request.merged == true
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: i686-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+          - target: i686-pc-windows-msvc
+            os: windows-2025
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Set up stable Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install cross for Linux musl targets
+        if: runner.os == 'Linux'
+        run: cargo install cross --locked --git https://github.com/cross-rs/cross
+
+      - name: Build Linux release
+        if: runner.os == 'Linux'
+        run: cross build --locked --release --target ${{ matrix.target }}
+
+      - name: Build macOS and Windows release
+        if: runner.os != 'Linux'
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package Linux and macOS binary
+        if: runner.os != 'Windows'
+        run: |
+          zip --junk-paths "$BINARY_NAME-${{ matrix.target }}.zip" \
+            "target/${{ matrix.target }}/release/$BINARY_NAME"
+
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" `
+            -DestinationPath "$env:BINARY_NAME-${{ matrix.target }}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.target }}
+          path: ${{ env.BINARY_NAME }}-${{ matrix.target }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: build-*
+          merge-multiple: true
+          path: dist
+
+      - name: Create prerelease and upload binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.zip \
+            --target "$RELEASE_SHA" \
+            --title "Release $RELEASE_TAG" \
+            --generate-notes \
+            --prerelease
