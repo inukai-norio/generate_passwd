@@ -105,20 +105,6 @@ pub fn entropy_bits<B: PasswordBase>(length: usize) -> f64 {
     length as f64 * (B::ALPHABET.len() as f64).log2()
 }
 
-/// 生成済みパスワードの表示文字列を作ります。lengthは区切り文字を除く長さです。
-pub fn format_password_report<B: PasswordBase>(
-    label: &str,
-    password: &str,
-    length: usize,
-) -> String {
-    let entropy_bits = entropy_bits::<B>(length);
-    let output_length = password.chars().count();
-    format!(
-        "{label}: {password}\n\
-         エントロピー: {entropy_bits:.2} ビット\n\
-         出力文字数: {output_length}（区切り文字込み、ランダム部分: {length} 文字）\n\n"
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -262,15 +248,5 @@ mod tests {
         assert!((entropy_bits::<Base36>(20) - 103.39850002884624).abs() < 1e-10);
         assert!((entropy_bits::<Base62>(20) - 119.0839262077375).abs() < 1e-10);
         assert_eq!(entropy_bits::<Base10>(0), 0.0);
-    }
-
-    #[test]
-    fn formats_report_with_separators_and_rounded_entropy() {
-        assert_eq!(
-            format_password_report::<Base10>("Base10", "0123-4567", 8),
-            "Base10: 0123-4567\n\
-             エントロピー: 26.58 ビット\n\
-             出力文字数: 9（区切り文字込み、ランダム部分: 8 文字）\n\n"
-        );
     }
 }

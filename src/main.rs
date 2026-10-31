@@ -1,4 +1,19 @@
-use generate_passwd::{Base10, Base26, Base36, Base62, PasswordBase, format_password_report};
+use generate_passwd::{Base10, Base26, Base36, Base62, PasswordBase, entropy_bits};
+
+/// 生成済みパスワードの表示文字列を作ります。lengthは区切り文字を除く長さです。
+pub fn format_password_report<B: PasswordBase>(
+    label: &str,
+    password: &str,
+    length: usize,
+) -> String {
+    let entropy_bits = entropy_bits::<B>(length);
+    let output_length = password.chars().count();
+    format!(
+        "{label}: {password}\n\
+         エントロピー: {entropy_bits:.2} ビット\n\
+         出力文字数: {output_length}（区切り文字込み、ランダム部分: {length} 文字）\n\n"
+    )
+}
 
 fn print_password<B: PasswordBase>(
     label: &str,
