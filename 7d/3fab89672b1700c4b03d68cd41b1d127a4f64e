@@ -1,0 +1,14 @@
+src/main.rs
+  h_c688ca482ab56a 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d3fab89672b1700c4b03d68cd41b1d127a4f64e",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
