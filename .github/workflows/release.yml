@@ -1,126 +1,109 @@
-name: build and release stable version
+name: Build and release
 
 on:
-  push:
-    tags:
-      - 'release-*'
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
 
 env:
-  name: generate_passwd
+  BINARY_NAME: generate_passwd
+  RELEASE_TAG: release-${{ github.run_number }}
+  RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
 
 jobs:
-  make-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      include-matrix: ${{ steps.include-matrix.outputs.value }}
-      target-list: ${{ steps.target-list.outputs.value }}
-    steps:
-      - name: make include-matrix
-        id: include-matrix
-        run: |
-          D=$(echo '[
-            { "target": "x86_64-unknown-linux-musl",  "os": "ubuntu-latest" },
-            { "target": "aarch64-unknown-linux-musl", "os": "ubuntu-latest" },
-            { "target": "i686-unknown-linux-musl",    "os": "ubuntu-latest" },
-            { "target": "x86_64-apple-darwin",        "os": "macos-latest" },
-            { "target": "aarch64-apple-darwin",       "os": "macos-11" },
-            { "target": "x86_64-pc-windows-msvc",     "os": "windows-latest" },
-            { "target": "i686-pc-windows-msvc",       "os": "windows-latest" }
-          ]' | jq -c .)
-          echo "::set-output name=value::${D}"
-      - name: make target-list
-        id: target-list
-        run: |
-          D=$(echo '${{ steps.include-matrix.outputs.value }}' | jq -c 'map(.target)')
-          echo "::set-output name=value::${D}"
   build:
-    name: build ${{ matrix.target }}
-    needs: [make-matrix]
+    if: github.event.pull_request.merged == true
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.make-matrix.outputs.include-matrix) }}
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: i686-unknown-linux-musl
+            os: ubuntu-24.04
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+          - target: i686-pc-windows-msvc
+            os: windows-2025
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-      - name: install g++-aarch64-linux-gnu
-        if: ${{ matrix.target == 'aarch64-unknown-linux-musl' }}
-        run: sudo apt-get install g++-aarch64-linux-gnu
-      - name: Setup rust
-        uses: actions-rs/toolchain@v1
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
         with:
-          toolchain: nightly
-          target: ${{ matrix.target }}
-          override: true
-      - name: Release build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target ${{ matrix.target }} --release
-      - name: Package for linux
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Set up stable Rust
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install cross for Linux musl targets
         if: runner.os == 'Linux'
-        run: |
-          zip --junk-paths ${{ env.name }}-${{ matrix.target }} target/${{ matrix.target }}/release/${{ env.name }}
+        run: cargo install cross --locked --git https://github.com/cross-rs/cross
 
-      - name: Package for macOS
-        if: runner.os == 'macOS'
-        run: |
-          zip --junk-paths ${{ env.name }}-${{ matrix.target }} target/${{ matrix.target }}/release/${{ env.name }}
+      - name: Build Linux release
+        if: runner.os == 'Linux'
+        run: cross build --locked --release --target ${{ matrix.target }}
 
-      - name: Package for windows
+      - name: Build macOS and Windows release
+        if: runner.os != 'Linux'
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Package Linux and macOS binary
+        if: runner.os != 'Windows'
+        run: |
+          zip --junk-paths "$BINARY_NAME-${{ matrix.target }}.zip" \
+            "target/${{ matrix.target }}/release/$BINARY_NAME"
+
+      - name: Package Windows binary
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          powershell Compress-Archive -Path target/${{ matrix.target }}/release/${{ env.name }}.exe -DestinationPath ${{ env.name }}-${{ matrix.target }}.zip
-      - uses: actions/upload-artifact@v2
+          Compress-Archive `
+            -Path "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" `
+            -DestinationPath "$env:BINARY_NAME-${{ matrix.target }}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.target }}
-          path: ${{ env.name }}-${{matrix.target}}.zip
+          path: ${{ env.BINARY_NAME }}-${{ matrix.target }}.zip
+          if-no-files-found: error
 
-  create-release:
-    needs: [build]
-    runs-on: ubuntu-latest
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - id: create-release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: true
-      - run: |
-          echo '${{ steps.create-release.outputs.upload_url }}' > release_upload_url.txt
-      - uses: actions/upload-artifact@v1
-        with:
-          name: create-release
-          path: release_upload_url.txt
+          pattern: build-*
+          merge-multiple: true
+          path: dist
 
-  publish-release:
-    name: publish ${{ matrix.target }}
-    needs: [make-matrix, build, create-release]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: ${{ fromJson(needs.make-matrix.outputs.target-list) }}
-    steps:
-      - uses: actions/download-artifact@v1
-        with:
-          name: create-release
-      - id: upload-url
-        run: |
-          echo "::set-output name=url::$(cat create-release/release_upload_url.txt)"
-      - uses: actions/download-artifact@v1
-        with:
-          name: build-${{ matrix.target }}
-      - name: check current directory
-        run: |
-          ls -a ./build-${{ matrix.target }}
-      - uses: actions/upload-release-asset@v1
+      - name: Create prerelease and upload binaries
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.upload-url.outputs.url }}
-          asset_path: ./build-${{ matrix.target }}/${{ env.name }}-${{ matrix.target }}.zip
-          asset_name: ${{ env.name }}-${{matrix.target}}.zip
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.zip \
+            --target "$RELEASE_SHA" \
+            --title "Release $RELEASE_TAG" \
+            --generate-notes \
+            --prerelease
