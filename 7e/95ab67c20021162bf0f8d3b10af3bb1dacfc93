@@ -1,0 +1,20 @@
+src/lib.rs
+  s_e6c4a70912c8d0::t_a63d1f0602a907 198-203
+  s_e6c4a70912c8d0::t_64c58434798c46 55,90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7e95ab67c20021162bf0f8d3b10af3bb1dacfc93",
+  "prompts": {},
+  "sessions": {
+    "s_e6c4a70912c8d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19652-a485-71e0-b7fa-c2b821ecdb8a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
