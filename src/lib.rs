@@ -52,7 +52,7 @@ pub trait PasswordBase {
         group_size: usize,
         random: &mut R,
     ) -> Result<String, getrandom::Error> {
-        let alphabet = Self::ALPHABET;
+        let alphabet: &[u8] = Self::ALPHABET;
         let limit = 256 - (256 % alphabet.len());
         let mut output = String::new();
         let mut buffer = [0u8; 64];
@@ -87,7 +87,7 @@ macro_rules! define_base {
         pub struct $name;
 
         impl PasswordBase for $name {
-            const ALPHABET: &'static [u8] = $alphabet;
+            const ALPHABET: &'static [u8] = ($alphabet).as_slice();
         }
     };
 }
@@ -195,8 +195,12 @@ mod tests {
     #[test]
     fn rejects_bytes_at_or_above_each_limit() {
         fn check<B: PasswordBase>(limit: u8, expected: &str) {
-            let mut batch = [0; 64];
-            batch[..4].copy_from_slice(&[limit - 1, limit, 255, 0]);
+            let batch = std::array::from_fn(|index| match index {
+                0 => limit - 1,
+                1 => limit,
+                2 => 255,
+                _ => 0,
+            });
             let mut random = ScriptedRandom::new([Ok(batch)]);
             // 棄却したバイトは文字数にもグループ位置にも数えない。
             assert_eq!(
