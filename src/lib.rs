@@ -105,7 +105,6 @@ pub fn entropy_bits<B: PasswordBase>(length: usize) -> f64 {
     length as f64 * (B::ALPHABET.len() as f64).log2()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
