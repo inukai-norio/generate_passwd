@@ -14,8 +14,14 @@ env:
   RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
 
 jobs:
-  build:
+  check:
     if: github.event.pull_request.merged == true
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+  build:
+    needs: check
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
