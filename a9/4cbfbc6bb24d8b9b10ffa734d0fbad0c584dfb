@@ -1,0 +1,21 @@
+AGENTS.md
+  s_e306031b76989d::t_1885178968894d 14-31
+  s_e306031b76989d::t_44c5d2ba5cf027 11-13
+  s_e306031b76989d::t_2ade9c9f51fc91 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a94cbfbc6bb24d8b9b10ffa734d0fbad0c584dfb",
+  "prompts": {},
+  "sessions": {
+    "s_e306031b76989d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1964e-82b0-7721-a608-040553098f32",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
