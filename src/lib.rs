@@ -161,12 +161,42 @@ mod tests {
                 max_output_length: Some(0),
                 ..PasswordOptions::default()
             },
+            PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(128.0),
+                max_output_length: Some(32),
+                ..PasswordOptions::default()
+            },
+            PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(f64::NAN),
+                ..PasswordOptions::default()
+            },
+            PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(f64::MAX),
+                ..PasswordOptions::default()
+            },
         ] {
             let result =
                 plan_password::<Base10>(&options).map(|plan| plan.generate_with(&mut random));
             assert!(result.is_err());
         }
         assert_eq!(random.calls, 0);
+    }
+
+    #[test]
+    fn generates_with_the_length_resolved_from_minimum_entropy() {
+        let options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(128.0),
+            max_output_length: Some(32),
+            ..PasswordOptions::default()
+        };
+        let plan = plan_password::<Base62>(&options).unwrap();
+        let mut random = ScriptedRandom::new([Ok([0; 64])]);
+        let password = plan.generate_with(&mut random).unwrap();
+        assert_eq!(password, "0000-0000-0000-0000-0000-00");
+        assert_eq!(password.len(), plan.output_length());
+        assert_eq!(password.bytes().filter(|&byte| byte != b'-').count(), 22);
+        assert!(plan.entropy_bits() >= 128.0);
+        assert_eq!(random.calls, 1);
     }
 
     #[test]

@@ -7,6 +7,24 @@ use crate::{OsRandom, PasswordBase, RandomSource, entropy_bits, generate_passwor
 pub enum LengthPolicy {
     /// ハイフンを除いて、正確に指定した文字数にします。0文字は指定できません。
     Exact(usize),
+    /// 指定ビット数以上になる最少のランダム文字数を使います。
+    ///
+    /// ビット数には有限の正の値を指定します。小数も使用できます。
+    ///
+    /// ```
+    /// use generate_passwd::{Base62, LengthPolicy, PasswordOptions, plan_password};
+    /// let options = PasswordOptions {
+    ///     length_policy: LengthPolicy::MinEntropy(128.0),
+    ///     max_output_length: Some(32),
+    ///     ..PasswordOptions::default()
+    /// };
+    /// let plan = plan_password::<Base62>(&options)?;
+    /// assert_eq!(plan.random_length(), 22);
+    /// assert_eq!(plan.output_length(), 27);
+    /// assert!(plan.entropy_bits() >= 128.0);
+    /// # Ok::<(), generate_passwd::ConstraintError>(())
+    /// ```
+    MinEntropy(f64),
 }
 
 /// パスワードの生成条件。
@@ -43,6 +61,18 @@ pub enum ConstraintError {
     InvalidAlphabet,
     /// 出力長の計算がオーバーフローするか、`String`で扱える長さを超えます。
     OutputLengthOverflow,
+    /// 最小エントロピーが非有限値、または0以下です。
+    InvalidMinEntropy,
+    /// 文字集合と扱えるランダム文字数の範囲では、要求ビット数を満たせません。
+    EntropyUnreachable { min_entropy_bits: f64 },
+    /// 要求ビット数を満たす最短の出力でも、出力上限を超えます。
+    EntropyLimitExceeded {
+        min_entropy_bits: f64,
+        random_length: usize,
+        output_length: usize,
+        max_output_length: usize,
+        max_entropy_bits: f64,
+    },
     /// 区切り文字を加えた長さが出力上限を超えます。
     OutputLimitExceeded {
         random_length: usize,
@@ -63,6 +93,23 @@ impl fmt::Display for ConstraintError {
             Self::OutputLengthOverflow => {
                 write!(f, "出力文字数が文字列として扱える範囲を超えています")
             }
+            Self::InvalidMinEntropy => {
+                write!(f, "最小エントロピーには有限の正の値を指定してください")
+            }
+            Self::EntropyUnreachable { min_entropy_bits } => write!(
+                f,
+                "この文字集合と扱えるランダム文字数の範囲では{min_entropy_bits}ビット以上を実現できません"
+            ),
+            Self::EntropyLimitExceeded {
+                min_entropy_bits,
+                random_length,
+                output_length,
+                max_output_length,
+                max_entropy_bits,
+            } => write!(
+                f,
+                "{min_entropy_bits}ビット以上にはランダム部分{random_length}文字、区切り込み{output_length}文字が必要です（出力上限: {max_output_length}文字、上限内で達成できるエントロピー: 約{max_entropy_bits:.2}ビット）"
+            ),
             Self::OutputLimitExceeded {
                 random_length,
                 output_length,
@@ -167,7 +214,9 @@ impl<B: PasswordBase> PasswordPlan<B> {
 
 /// 条件を検証し、乱数を取得せずに生成計画を作ります。
 ///
-/// 0文字、出力上限超過、文字集合の契約違反、出力長の範囲外を拒否します。
+/// 0文字、不正な最小エントロピー、出力上限超過、文字集合の契約違反、
+/// 出力長の範囲外を拒否します。エントロピーの判定は[`entropy_bits`]と同じ
+/// `f64`精度で行い、表示用に丸めた値や許容誤差は使いません。
 /// `String`で扱える長さでも、実際に確保できるメモリ量は実行環境に依存します。
 pub fn plan_password<B: PasswordBase>(
     options: &PasswordOptions,
@@ -176,16 +225,29 @@ pub fn plan_password<B: PasswordBase>(
     if options.max_output_length == Some(0) {
         return Err(ConstraintError::ZeroMaxOutputLength);
     }
-    let LengthPolicy::Exact(random_length) = options.length_policy;
-    if random_length == 0 {
-        return Err(ConstraintError::ZeroLength);
-    }
+    let random_length = match options.length_policy {
+        LengthPolicy::Exact(0) => return Err(ConstraintError::ZeroLength),
+        LengthPolicy::Exact(length) => length,
+        LengthPolicy::MinEntropy(bits) => minimum_random_length::<B>(bits)?,
+    };
     let output_length = output_length(random_length, options.group_size)
         .filter(|&length| length <= isize::MAX as usize)
         .ok_or(ConstraintError::OutputLengthOverflow)?;
     if let Some(max_output_length) = options.max_output_length
         && output_length > max_output_length
     {
+        if let LengthPolicy::MinEntropy(min_entropy_bits) = options.length_policy {
+            return Err(ConstraintError::EntropyLimitExceeded {
+                min_entropy_bits,
+                random_length,
+                output_length,
+                max_output_length,
+                max_entropy_bits: entropy_bits::<B>(max_random_length(
+                    max_output_length,
+                    options.group_size,
+                )),
+            });
+        }
         return Err(ConstraintError::OutputLimitExceeded {
             random_length,
             output_length,
@@ -223,10 +285,45 @@ fn output_length(random_length: usize, group_size: usize) -> Option<usize> {
     random_length.checked_add(separators)
 }
 
+fn minimum_random_length<B: PasswordBase>(bits: f64) -> Result<usize, ConstraintError> {
+    if !bits.is_finite() || bits <= 0.0 {
+        return Err(ConstraintError::InvalidMinEntropy);
+    }
+    let mut low = 1;
+    let mut high = isize::MAX as usize;
+    if entropy_bits::<B>(high) < bits {
+        // 1文字だけの文字集合も、エントロピーが常に0なのでここで拒否する。
+        return Err(ConstraintError::EntropyUnreachable {
+            min_entropy_bits: bits,
+        });
+    }
+    // 要求を満たす最初の文字数を二分探索する。
+    // 浮動小数から整数への変換や、その後の丸め誤差の補正は不要。
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if entropy_bits::<B>(middle) >= bits {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    Ok(low)
+}
+
+// 上限内で達成できるエントロピーを、条件エラーに表示するために使用する。
+fn max_random_length(max_output_length: usize, group_size: usize) -> usize {
+    if group_size == 0 || group_size >= max_output_length {
+        return max_output_length;
+    }
+    // (g+1)文字ごとのハイフン用の枠を、全体の上限から除く。
+    // 上の分岐によりg < max_output_lengthなので、g+1はオーバーフローしない。
+    max_output_length - max_output_length / (group_size + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Base10, Base62};
+    use crate::{Base10, Base26, Base36, Base62};
 
     #[test]
     fn counts_separators_at_group_boundaries() {
@@ -297,6 +394,193 @@ mod tests {
         };
         let plan = plan_password::<Base10>(&options).unwrap();
         assert_eq!(plan.output_length(), isize::MAX as usize);
+    }
+
+    #[test]
+    fn resolves_minimum_entropy_for_each_base() {
+        fn check<B: PasswordBase>(expected_random: usize, expected_output: usize) {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(128.0),
+                ..PasswordOptions::default()
+            };
+            let plan = plan_password::<B>(&options).unwrap();
+            assert_eq!(plan.random_length(), expected_random);
+            assert_eq!(plan.output_length(), expected_output);
+            assert!(plan.entropy_bits() >= 128.0);
+            assert!(entropy_bits::<B>(plan.random_length() - 1) < 128.0);
+        }
+        check::<Base10>(39, 48);
+        check::<Base26>(28, 34);
+        check::<Base36>(25, 31);
+        check::<Base62>(22, 27);
+    }
+
+    #[test]
+    fn compares_unrounded_entropy_at_length_boundaries() {
+        fn check<B: PasswordBase>() {
+            for length in [1, 4, 20, 21, 22, 64, 128] {
+                let boundary = entropy_bits::<B>(length);
+                // 境界の直前・境界そのもの・直後で、最少文字数の条件を確認する。
+                for bits in [boundary.next_down(), boundary, boundary.next_up()] {
+                    let options = PasswordOptions {
+                        length_policy: LengthPolicy::MinEntropy(bits),
+                        ..PasswordOptions::default()
+                    };
+                    let plan = plan_password::<B>(&options).unwrap();
+                    assert!(plan.entropy_bits() >= bits);
+                    assert!(entropy_bits::<B>(plan.random_length() - 1) < bits);
+                }
+                assert_eq!(minimum_random_length::<B>(boundary).unwrap(), length);
+                assert_eq!(
+                    minimum_random_length::<B>(boundary.next_up()).unwrap(),
+                    length + 1
+                );
+            }
+        }
+        check::<Base10>();
+        check::<Base26>();
+        check::<Base36>();
+        check::<Base62>();
+        let boundary = entropy_bits::<Base62>(22);
+        assert_eq!(
+            format!("{boundary:.2}"),
+            format!("{:.2}", boundary.next_up())
+        );
+    }
+
+    #[test]
+    fn accepts_fractional_and_very_small_positive_entropy() {
+        for (bits, expected_length) in [(128.5, 22), (f64::from_bits(1), 1)] {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(bits),
+                ..PasswordOptions::default()
+            };
+            let plan = plan_password::<Base62>(&options).unwrap();
+            assert_eq!(plan.random_length(), expected_length);
+            assert!(plan.entropy_bits() >= bits);
+            assert!(entropy_bits::<Base62>(plan.random_length() - 1) < bits);
+        }
+    }
+
+    #[test]
+    fn rejects_non_positive_or_non_finite_entropy() {
+        for bits in [0.0, -0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::MinEntropy(bits),
+                ..PasswordOptions::default()
+            };
+            assert!(matches!(
+                plan_password::<Base62>(&options),
+                Err(ConstraintError::InvalidMinEntropy)
+            ));
+        }
+    }
+
+    #[test]
+    fn rejects_entropy_outside_the_representable_length_range() {
+        let options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(f64::MAX),
+            ..PasswordOptions::default()
+        };
+        assert!(matches!(
+            plan_password::<Base62>(&options),
+            Err(ConstraintError::EntropyUnreachable { min_entropy_bits })
+                if min_entropy_bits == f64::MAX
+        ));
+        let options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(entropy_bits::<Base62>(isize::MAX as usize)),
+            group_size: 1,
+            ..PasswordOptions::default()
+        };
+        assert!(matches!(
+            plan_password::<Base62>(&options),
+            Err(ConstraintError::OutputLengthOverflow)
+        ));
+    }
+
+    #[test]
+    fn a_single_character_alphabet_cannot_provide_positive_entropy() {
+        struct Single;
+        impl PasswordBase for Single {
+            const ALPHABET: &'static [u8] = b"x";
+        }
+        assert!(plan_password::<Single>(&PasswordOptions::default()).is_ok());
+        let options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(1.0),
+            ..PasswordOptions::default()
+        };
+        assert!(matches!(
+            plan_password::<Single>(&options),
+            Err(ConstraintError::EntropyUnreachable {
+                min_entropy_bits: 1.0
+            })
+        ));
+    }
+
+    #[test]
+    fn reports_required_length_and_achievable_entropy_when_limit_is_too_short() {
+        let options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(128.0),
+            max_output_length: Some(32),
+            ..PasswordOptions::default()
+        };
+        assert!(plan_password::<Base62>(&options).is_ok());
+        let Err(error) = plan_password::<Base10>(&options) else {
+            panic!("Base10の128ビットは出力上限32文字に収まらない");
+        };
+        assert!(matches!(
+            error,
+            ConstraintError::EntropyLimitExceeded {
+                min_entropy_bits: 128.0,
+                random_length: 39,
+                output_length: 48,
+                max_output_length: 32,
+                max_entropy_bits,
+            } if max_entropy_bits == entropy_bits::<Base10>(26)
+        ));
+        let message = error.to_string();
+        assert!(message.contains("39文字") && message.contains("48文字"));
+        assert!(message.contains("32文字") && message.contains("86.37ビット"));
+    }
+
+    #[test]
+    fn entropy_limit_includes_separators_without_counting_them_as_entropy() {
+        let mut options = PasswordOptions {
+            length_policy: LengthPolicy::MinEntropy(128.0),
+            max_output_length: Some(27),
+            ..PasswordOptions::default()
+        };
+        let plan = plan_password::<Base62>(&options).unwrap();
+        assert_eq!(plan.output_length(), 27);
+        options.max_output_length = Some(26);
+        assert!(matches!(
+            plan_password::<Base62>(&options),
+            Err(ConstraintError::EntropyLimitExceeded {
+                output_length: 27,
+                ..
+            })
+        ));
+        options.group_size = 0;
+        options.max_output_length = Some(22);
+        let ungrouped = plan_password::<Base62>(&options).unwrap();
+        assert_eq!(ungrouped.output_length(), 22);
+        assert_eq!(ungrouped.entropy_bits(), plan.entropy_bits());
+    }
+
+    #[test]
+    fn maximum_random_length_agrees_with_enumerated_outputs() {
+        for limit in 0..=32 {
+            for group in 0..=8 {
+                let expected = (0..=limit)
+                    .filter(|&n| output_length(n, group).unwrap() <= limit)
+                    .max()
+                    .unwrap();
+                assert_eq!(max_random_length(limit, group), expected);
+            }
+        }
+        assert_eq!(max_random_length(usize::MAX, usize::MAX), usize::MAX);
+        assert_eq!(max_random_length(usize::MAX, 0), usize::MAX);
+        assert_eq!(max_random_length(usize::MAX, 1), usize::MAX / 2 + 1);
     }
 
     #[test]
