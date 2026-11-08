@@ -17,68 +17,49 @@ impl RandomSource for OsRandom {
     }
 }
 
-/// パスワードに使用する文字集合と生成処理。
+mod plan;
+
+pub use plan::{ConstraintError, LengthPolicy, PasswordOptions, PasswordPlan, plan_password};
+
+/// パスワードに使用する文字集合。
+///
+/// 生成には[`plan_password`]で検証した[`PasswordPlan`]を使います。
 pub trait PasswordBase {
     /// 空でない、重複のないASCII文字集合（最大128文字）。
     const ALPHABET: &'static [u8];
+}
 
-    /// OSの乱数を使って生成します。lengthは区切り文字を除く長さです。
-    fn generate_password(length: usize, group_size: usize) -> Result<String, getrandom::Error> {
-        Self::generate_password_with(length, group_size, &mut OsRandom)
-    }
+fn generate_password_with<B: PasswordBase, R: RandomSource + ?Sized>(
+    length: usize,
+    group_size: usize,
+    random: &mut R,
+) -> Result<String, getrandom::Error> {
+    let alphabet = B::ALPHABET;
+    let limit = 256 - (256 % alphabet.len());
+    let mut output = String::new();
+    let mut buffer = [0u8; 64];
+    let mut count = 0;
 
-    /// 呼び出し側が渡した乱数取得実装を使って生成します。
-    ///
-    /// group_sizeが0なら区切り文字を挿入しません。
-    /// lengthが0なら乱数を取得せず、空文字列を返します。
-    ///
-    /// ```
-    /// use generate_passwd::{Base10, PasswordBase, RandomSource};
-    ///
-    /// struct FixedRandom;
-    /// impl RandomSource for FixedRandom {
-    ///     fn fill(&mut self, buffer: &mut [u8]) -> Result<(), getrandom::Error> {
-    ///         buffer.fill(0);
-    ///         Ok(())
-    ///     }
-    /// }
-    ///
-    /// let password = Base10::generate_password_with(8, 4, &mut FixedRandom)?;
-    /// assert_eq!(password, "0000-0000");
-    /// # Ok::<(), getrandom::Error>(())
-    /// ```
-    fn generate_password_with<R: RandomSource + ?Sized>(
-        length: usize,
-        group_size: usize,
-        random: &mut R,
-    ) -> Result<String, getrandom::Error> {
-        let alphabet = Self::ALPHABET;
-        let limit = 256 - (256 % alphabet.len());
-        let mut output = String::new();
-        let mut buffer = [0u8; 64];
-        let mut count = 0;
+    while count < length {
+        random.fill(&mut buffer)?;
 
-        while count < length {
-            random.fill(&mut buffer)?;
-
-            for &byte in &buffer {
-                // 剰余による文字の選択確率の偏りを避けるため、端数の領域を棄却する。
-                if usize::from(byte) >= limit {
-                    continue;
-                }
-                if group_size != 0 && count != 0 && count % group_size == 0 {
-                    output.push('-');
-                }
-                let index = usize::from(byte) % alphabet.len();
-                output.push(alphabet[index] as char);
-                count += 1;
-                if count == length {
-                    break;
-                }
+        for &byte in &buffer {
+            // 剰余による文字の選択確率の偏りを避けるため、端数の領域を棄却する。
+            if usize::from(byte) >= limit {
+                continue;
+            }
+            if group_size != 0 && count != 0 && count % group_size == 0 {
+                output.push('-');
+            }
+            let index = usize::from(byte) % alphabet.len();
+            output.push(alphabet[index] as char);
+            count += 1;
+            if count == length {
+                break;
             }
         }
-        Ok(output)
     }
+    Ok(output)
 }
 
 // Base型を定義するマクロ
@@ -134,12 +115,28 @@ mod tests {
         }
     }
 
+    fn generate<B: PasswordBase>(
+        length: usize,
+        group_size: usize,
+        random: &mut impl RandomSource,
+    ) -> Result<String, getrandom::Error> {
+        let plan = plan_password::<B>(&PasswordOptions {
+            length_policy: LengthPolicy::Exact(length),
+            group_size,
+            ..PasswordOptions::default()
+        })
+        .unwrap();
+        let password = plan.generate_with(random)?;
+        assert_eq!(password.len(), plan.output_length());
+        Ok(password)
+    }
+
     #[test]
     fn maps_bytes_to_each_alphabet_in_order() {
         fn check<B: PasswordBase>(expected: &str) {
             let batch = std::array::from_fn(|index| index as u8);
             let mut random = ScriptedRandom::new([Ok(batch)]);
-            let password = B::generate_password_with(expected.len(), 0, &mut random).unwrap();
+            let password = generate::<B>(expected.len(), 0, &mut random).unwrap();
             assert_eq!(password, expected);
         }
         check::<Base10>("0123456789");
@@ -149,12 +146,26 @@ mod tests {
     }
 
     #[test]
-    fn zero_length_does_not_request_random_bytes() {
+    fn invalid_conditions_do_not_request_random_bytes() {
         let mut random = ScriptedRandom::new([]);
-        assert_eq!(
-            Base10::generate_password_with(0, 4, &mut random),
-            Ok(String::new())
-        );
+        for options in [
+            PasswordOptions {
+                length_policy: LengthPolicy::Exact(0),
+                ..PasswordOptions::default()
+            },
+            PasswordOptions {
+                max_output_length: Some(23),
+                ..PasswordOptions::default()
+            },
+            PasswordOptions {
+                max_output_length: Some(0),
+                ..PasswordOptions::default()
+            },
+        ] {
+            let result =
+                plan_password::<Base10>(&options).map(|plan| plan.generate_with(&mut random));
+            assert!(result.is_err());
+        }
         assert_eq!(random.calls, 0);
     }
 
@@ -170,7 +181,7 @@ mod tests {
         ] {
             let mut random = ScriptedRandom::new([Ok([0; 64])]);
             assert_eq!(
-                Base10::generate_password_with(length, group_size, &mut random).unwrap(),
+                generate::<Base10>(length, group_size, &mut random).unwrap(),
                 expected,
                 "length={length}, group_size={group_size}"
             );
@@ -181,7 +192,7 @@ mod tests {
     fn refills_buffer_only_when_needed() {
         for (length, expected_calls) in [(64, 1), (65, 2)] {
             let mut random = ScriptedRandom::new([Ok([0; 64]), Ok([1; 64])]);
-            let password = Base10::generate_password_with(length, 0, &mut random).unwrap();
+            let password = generate::<Base10>(length, 0, &mut random).unwrap();
             let expected = if length == 64 {
                 "0".repeat(64)
             } else {
@@ -199,10 +210,7 @@ mod tests {
             batch[..4].copy_from_slice(&[limit - 1, limit, 255, 0]);
             let mut random = ScriptedRandom::new([Ok(batch)]);
             // 棄却したバイトは文字数にもグループ位置にも数えない。
-            assert_eq!(
-                B::generate_password_with(2, 1, &mut random).unwrap(),
-                expected
-            );
+            assert_eq!(generate::<B>(2, 1, &mut random).unwrap(), expected);
         }
         check::<Base10>(250, "9-0");
         check::<Base26>(234, "z-a");
@@ -213,10 +221,7 @@ mod tests {
     #[test]
     fn retries_after_entire_buffer_is_rejected() {
         let mut random = ScriptedRandom::new([Ok([255; 64]), Ok([0; 64])]);
-        assert_eq!(
-            Base62::generate_password_with(1, 0, &mut random).unwrap(),
-            "0"
-        );
+        assert_eq!(generate::<Base62>(1, 0, &mut random).unwrap(), "0");
         assert_eq!(random.calls, 2);
     }
 
@@ -224,7 +229,7 @@ mod tests {
     fn propagates_initial_random_error() {
         let mut random = ScriptedRandom::new([Err(getrandom::Error::UNSUPPORTED)]);
         assert_eq!(
-            Base10::generate_password_with(1, 0, &mut random),
+            generate::<Base10>(1, 0, &mut random),
             Err(getrandom::Error::UNSUPPORTED)
         );
         assert_eq!(random.calls, 1);
@@ -234,7 +239,7 @@ mod tests {
     fn propagates_random_error_after_partial_generation() {
         let mut random = ScriptedRandom::new([Ok([0; 64]), Err(getrandom::Error::UNEXPECTED)]);
         assert_eq!(
-            Base10::generate_password_with(65, 0, &mut random),
+            generate::<Base10>(65, 0, &mut random),
             Err(getrandom::Error::UNEXPECTED)
         );
         assert_eq!(random.calls, 2);
