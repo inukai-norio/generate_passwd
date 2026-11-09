@@ -174,6 +174,15 @@ mod tests {
                 length_policy: LengthPolicy::MinEntropy(f64::MAX),
                 ..PasswordOptions::default()
             },
+            PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                ..PasswordOptions::default()
+            },
+            PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                max_output_length: Some(0),
+                ..PasswordOptions::default()
+            },
         ] {
             let result =
                 plan_password::<Base10>(&options).map(|plan| plan.generate_with(&mut random));
@@ -197,6 +206,30 @@ mod tests {
         assert_eq!(password.bytes().filter(|&byte| byte != b'-').count(), 22);
         assert!(plan.entropy_bits() >= 128.0);
         assert_eq!(random.calls, 1);
+    }
+
+    #[test]
+    fn generates_fitted_passwords_without_padding_or_truncation() {
+        for (limit, group_size, expected) in [
+            (24, 4, "0000-0000-0000-0000-0000"),
+            (5, 4, "0000"),
+            (6, 4, "0000-0"),
+            (5, 0, "00000"),
+            (6, 1, "0-0-0"),
+        ] {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                max_output_length: Some(limit),
+                group_size,
+            };
+            let plan = plan_password::<Base10>(&options).unwrap();
+            let mut random = ScriptedRandom::new([Ok([0; 64])]);
+            let password = plan.generate_with(&mut random).unwrap();
+            assert_eq!(password, expected);
+            assert_eq!(password.len(), plan.output_length());
+            assert!(password.len() <= limit);
+            assert_eq!(random.calls, 1);
+        }
     }
 
     #[test]

@@ -25,6 +25,23 @@ pub enum LengthPolicy {
     /// # Ok::<(), generate_passwd::ConstraintError>(())
     /// ```
     MinEntropy(f64),
+    /// ハイフン込みの出力上限に収まる、最多のランダム文字を使います。
+    ///
+    /// [`PasswordOptions::max_output_length`]に正の上限を指定する必要があります。
+    ///
+    /// ```
+    /// use generate_passwd::{Base62, LengthPolicy, PasswordOptions, plan_password};
+    /// let options = PasswordOptions {
+    ///     length_policy: LengthPolicy::FitToMaxOutput,
+    ///     max_output_length: Some(5),
+    ///     ..PasswordOptions::default()
+    /// };
+    /// let plan = plan_password::<Base62>(&options)?;
+    /// assert_eq!(plan.random_length(), 4);
+    /// assert_eq!(plan.output_length(), 4); // 末尾ハイフンで5文字にはしない
+    /// # Ok::<(), generate_passwd::ConstraintError>(())
+    /// ```
+    FitToMaxOutput,
 }
 
 /// パスワードの生成条件。
@@ -35,6 +52,7 @@ pub struct PasswordOptions {
     /// ランダム部分の文字数を決める方法。
     pub length_policy: LengthPolicy,
     /// ハイフンを含む出力全体の上限。`None`なら上限を指定しません。
+    /// [`LengthPolicy::FitToMaxOutput`]では`Some`による指定が必須です。
     pub max_output_length: Option<usize>,
     /// 0なら区切りなし。それ以外は指定文字数ごとに`-`を挿入します。
     pub group_size: usize,
@@ -57,6 +75,8 @@ pub enum ConstraintError {
     ZeroLength,
     /// 出力上限に0文字を指定しています。
     ZeroMaxOutputLength,
+    /// 出力上限に合わせるモードで、上限が指定されていません。
+    MissingMaxOutputLength,
     /// 文字集合が[`PasswordBase::ALPHABET`]の契約を満たしていません。
     InvalidAlphabet,
     /// 出力長の計算がオーバーフローするか、`String`で扱える長さを超えます。
@@ -86,6 +106,9 @@ impl fmt::Display for ConstraintError {
         match self {
             Self::ZeroLength => write!(f, "ランダム部分の文字数には1以上を指定してください"),
             Self::ZeroMaxOutputLength => write!(f, "最大出力文字数には1以上を指定してください"),
+            Self::MissingMaxOutputLength => {
+                write!(f, "出力上限に合わせるモードでは最大出力文字数が必要です")
+            }
             Self::InvalidAlphabet => write!(
                 f,
                 "文字集合は重複のない1〜128文字のASCIIである必要があります"
@@ -229,6 +252,12 @@ pub fn plan_password<B: PasswordBase>(
         LengthPolicy::Exact(0) => return Err(ConstraintError::ZeroLength),
         LengthPolicy::Exact(length) => length,
         LengthPolicy::MinEntropy(bits) => minimum_random_length::<B>(bits)?,
+        LengthPolicy::FitToMaxOutput => max_random_length(
+            options
+                .max_output_length
+                .ok_or(ConstraintError::MissingMaxOutputLength)?,
+            options.group_size,
+        ),
     };
     let output_length = output_length(random_length, options.group_size)
         .filter(|&length| length <= isize::MAX as usize)
@@ -310,7 +339,7 @@ fn minimum_random_length<B: PasswordBase>(bits: f64) -> Result<usize, Constraint
     Ok(low)
 }
 
-// 上限内で達成できるエントロピーを、条件エラーに表示するために使用する。
+// 出力上限に収まる最多のランダム文字数。上限指定モードとエラー説明で共用する。
 fn max_random_length(max_output_length: usize, group_size: usize) -> usize {
     if group_size == 0 || group_size >= max_output_length {
         return max_output_length;
@@ -581,6 +610,61 @@ mod tests {
         assert_eq!(max_random_length(usize::MAX, usize::MAX), usize::MAX);
         assert_eq!(max_random_length(usize::MAX, 0), usize::MAX);
         assert_eq!(max_random_length(usize::MAX, 1), usize::MAX / 2 + 1);
+    }
+
+    #[test]
+    fn fits_the_most_random_characters_within_the_output_limit() {
+        for (limit, group, expected_random, expected_output) in [
+            (24, 4, 20, 24),
+            (5, 4, 4, 4),
+            (6, 4, 5, 6),
+            (9, 4, 8, 9),
+            (10, 4, 8, 9),
+            (32, 0, 32, 32),
+            (6, 1, 3, 5),
+            (1, 4, 1, 1),
+            (5, usize::MAX, 5, 5),
+        ] {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                max_output_length: Some(limit),
+                group_size: group,
+            };
+            let plan = plan_password::<Base62>(&options).unwrap();
+            assert_eq!(plan.random_length(), expected_random);
+            assert_eq!(plan.output_length(), expected_output);
+            assert!(plan.output_length() <= limit);
+            // 1文字増やすと上限を超えることで、最多の文字数であることを確認する。
+            assert!(output_length(plan.random_length() + 1, group).unwrap() > limit);
+        }
+    }
+
+    #[test]
+    fn fitting_requires_a_positive_representable_output_limit() {
+        for (limit, expected) in [
+            (None, ConstraintError::MissingMaxOutputLength),
+            (Some(0), ConstraintError::ZeroMaxOutputLength),
+            (Some(usize::MAX), ConstraintError::OutputLengthOverflow),
+        ] {
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                max_output_length: limit,
+                ..PasswordOptions::default()
+            };
+            assert!(matches!(plan_password::<Base62>(&options), Err(error) if error == expected));
+        }
+        // 境界値の計画だけを作り、巨大な文字列は生成しない。
+        for group in [0, 1, 4, usize::MAX] {
+            let limit = isize::MAX as usize;
+            let options = PasswordOptions {
+                length_policy: LengthPolicy::FitToMaxOutput,
+                max_output_length: Some(limit),
+                group_size: group,
+            };
+            let plan = plan_password::<Base62>(&options).unwrap();
+            assert!(plan.output_length() <= limit);
+            assert!(output_length(plan.random_length() + 1, group).unwrap() > limit);
+        }
     }
 
     #[test]
