@@ -1,0 +1,23 @@
+src/lib.rs
+  s_e306031b76989d::t_737d9593e9e337 177-185,211-232
+  s_e306031b76989d::t_4f6bf1b45aba73 233-234
+src/plan.rs
+  s_e306031b76989d::t_737d9593e9e337 28-44,55,78-79,109-111,255-260,342,615-668
+  s_e306031b76989d::t_10e1a4f619267a 669
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "16b976e256bde3b966ba56a937535b9214814aa2",
+  "prompts": {},
+  "sessions": {
+    "s_e306031b76989d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1964e-82b0-7721-a608-040553098f32",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
