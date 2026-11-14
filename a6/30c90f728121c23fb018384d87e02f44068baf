@@ -1,0 +1,21 @@
+Cargo.toml
+  s_e306031b76989d::t_5b9d028f5c7017 7
+Cargo.lock
+  s_e306031b76989d::t_2b10d73ef3bc51 5-10,17-54,59,74-79,86-103,109-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a630c90f728121c23fb018384d87e02f44068baf",
+  "prompts": {},
+  "sessions": {
+    "s_e306031b76989d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1964e-82b0-7721-a608-040553098f32",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
