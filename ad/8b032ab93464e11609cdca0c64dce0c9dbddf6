@@ -1,0 +1,19 @@
+tests/cli.rs
+  s_e306031b76989d::t_4528a01c096e61 207-211,217-222,257-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ad8b032ab93464e11609cdca0c64dce0c9dbddf6",
+  "prompts": {},
+  "sessions": {
+    "s_e306031b76989d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1964e-82b0-7721-a608-040553098f32",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
