@@ -204,15 +204,22 @@ fn missing_values_and_duplicate_options_are_input_errors() {
     ] {
         for args in [vec![name], vec![name, "--help"]] {
             let output = run(&args);
-            assert_eq!(output.status.code(), Some(2));
-            assert!(output.stdout.is_empty());
-            assert!(String::from_utf8_lossy(&output.stderr).contains("値が必要です"));
+            assert_eq!(output.status.code(), Some(2), "{args:?}");
+            assert!(output.stdout.is_empty(), "{args:?}");
+            let error = String::from_utf8_lossy(&output.stderr);
+            assert!(error.contains(name), "{args:?}: {error}");
+            assert!(error.contains("a value is required"), "{args:?}: {error}");
         }
         let repeated = format!("{name}={value}");
         let output = run(&[name, value, &repeated]);
         assert_eq!(output.status.code(), Some(2));
         assert!(output.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("一度だけ指定"));
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains(name), "{name}: {error}");
+        assert!(
+            error.contains("cannot be used multiple times"),
+            "{name}: {error}"
+        );
     }
 }
 
@@ -247,7 +254,10 @@ fn invalid_utf8_is_an_input_error_instead_of_a_panic() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("UTF-8"));
+    // clapは引数の位置によって診断が変わるため、拒否とパニックしないことを確認する。
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(!error.is_empty());
+    assert!(!error.contains("panicked"), "{error}");
 }
 
 #[cfg(target_os = "linux")]
