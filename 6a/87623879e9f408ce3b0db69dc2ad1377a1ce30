@@ -1,0 +1,20 @@
+scripts/serve_coverage.py
+  s_e306031b76989d::t_415910b07ab676 1-4,6-64
+  s_e306031b76989d::t_dafafcdc9e7f21 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6a87623879e9f408ce3b0db69dc2ad1377a1ce30",
+  "prompts": {},
+  "sessions": {
+    "s_e306031b76989d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1964e-82b0-7721-a608-040553098f32",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
