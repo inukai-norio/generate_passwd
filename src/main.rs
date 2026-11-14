@@ -1,36 +1,36 @@
-use generate_passwd::{Base10, Base26, Base36, Base62, PasswordBase, entropy_bits};
+mod cli;
 
-/// 生成済みパスワードの表示文字列を作ります。lengthは区切り文字を除く長さです。
-pub fn format_password_report<B: PasswordBase>(
-    label: &str,
-    password: &str,
-    length: usize,
-) -> String {
-    let entropy_bits = entropy_bits::<B>(length);
-    let output_length = password.chars().count();
-    format!(
-        "{label}: {password}\n\
-         エントロピー: {entropy_bits:.2} ビット\n\
-         出力文字数: {output_length}（区切り文字込み、ランダム部分: {length} 文字）\n\n"
-    )
+use std::{
+    fmt::Display,
+    io::{self, Write},
+    process::ExitCode,
+};
+
+use generate_passwd::OsRandom;
+
+fn main() -> ExitCode {
+    match cli::run(std::env::args_os().skip(1), &mut OsRandom) {
+        Ok(report) => match write_report(&report) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                write_error(format_args!("出力に失敗しました: {error}"));
+                ExitCode::FAILURE
+            }
+        },
+        Err(error) => {
+            write_error(&error);
+            error.exit_code()
+        }
+    }
 }
 
-fn print_password<B: PasswordBase>(
-    label: &str,
-    length: usize,
-    group_size: usize,
-) -> Result<(), getrandom::Error> {
-    let password = B::generate_password(length, group_size)?;
-    print!("{}", format_password_report::<B>(label, &password, length));
-
-    Ok(())
+fn write_report(report: &str) -> io::Result<()> {
+    let mut stdout = io::stdout().lock();
+    stdout.write_all(report.as_bytes())?;
+    stdout.flush()
 }
 
-fn main() -> Result<(), getrandom::Error> {
-    print_password::<Base10>("Base10", 20, 4)?;
-    print_password::<Base26>("Base26", 20, 4)?;
-    print_password::<Base36>("Base36", 20, 4)?;
-    print_password::<Base62>("Base62", 20, 4)?;
-
-    Ok(())
+fn write_error(error: impl Display) {
+    // エラーの表示先も書けない場合、再度エラーを表示しようとはしない。
+    let _ = writeln!(io::stderr().lock(), "{error}");
 }
