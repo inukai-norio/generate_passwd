@@ -1,4 +1,6 @@
-use std::{collections::HashSet, ffi::OsString, fmt, process::ExitCode, str::FromStr};
+use std::{ffi::OsString, fmt, process::ExitCode};
+
+use clap::{Parser, ValueEnum, error::ErrorKind};
 
 use generate_passwd::{
     Base10, Base26, Base36, Base62, ConstraintError, LengthPolicy, PasswordBase, PasswordOptions,
@@ -25,6 +27,25 @@ const HELP: &str = "\
 
 終了コード: 0 成功・ヘルプ、1 乱数取得・出力エラー、2 引数・生成条件エラー
 ";
+
+#[derive(Parser)]
+#[command(name = "generate_passwd", no_binary_name = true, override_help = HELP)]
+struct CliArgs {
+    #[arg(long, value_name = "N", value_parser = positive_integer, conflicts_with = "min_entropy")]
+    length: Option<usize>,
+
+    #[arg(long, value_name = "BITS", value_parser = positive_entropy)]
+    min_entropy: Option<f64>,
+
+    #[arg(long, value_name = "M", value_parser = positive_integer)]
+    max_length: Option<usize>,
+
+    #[arg(long, value_name = "G")]
+    group_size: Option<usize>,
+
+    #[arg(long, value_name = "BASE", value_enum, default_value = "all")]
+    base: BaseSelection,
+}
 
 #[derive(Debug)]
 pub(crate) enum CliError {
@@ -65,6 +86,31 @@ impl Base {
             Self::Base26 => "Base26",
             Self::Base36 => "Base36",
             Self::Base62 => "Base62",
+        }
+    }
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum BaseSelection {
+    #[value(name = "10")]
+    Base10,
+    #[value(name = "26")]
+    Base26,
+    #[value(name = "36")]
+    Base36,
+    #[value(name = "62")]
+    Base62,
+    All,
+}
+
+impl BaseSelection {
+    fn bases(self) -> Vec<Base> {
+        match self {
+            Self::Base10 => vec![Base::Base10],
+            Self::Base26 => vec![Base::Base26],
+            Self::Base36 => vec![Base::Base36],
+            Self::Base62 => vec![Base::Base62],
+            Self::All => all_bases(),
         }
     }
 }
@@ -148,80 +194,27 @@ pub(crate) fn run(
 }
 
 fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, CliError> {
-    let mut args = args.into_iter();
+    // clap自身には出力・終了させず、mainで出力エラーと終了コードを扱う。
+    let args = match CliArgs::try_parse_from(args) {
+        Ok(args) => args,
+        Err(error) if error.kind() == ErrorKind::DisplayHelp => return Ok(Command::Help),
+        Err(error) => return Err(CliError::Input(error.to_string())),
+    };
     let defaults = PasswordOptions::default();
-    let mut seen = HashSet::new();
-    let mut length = None;
-    let mut min_entropy = None;
-    let mut max_output_length = None;
-    let mut group_size = defaults.group_size;
-    let mut bases = all_bases();
-
-    while let Some(arg) = args.next() {
-        let arg = argument_string(arg)?;
-        if arg == "--help" || arg == "-h" {
-            return Ok(Command::Help);
-        }
-        let (name, inline_value) = match arg.split_once('=') {
-            Some((name, value)) => (name, Some(value)),
-            None => (arg.as_str(), None),
-        };
-        if !matches!(
-            name,
-            "--length" | "--min-entropy" | "--max-length" | "--group-size" | "--base"
-        ) {
-            return Err(unknown_argument(name));
-        }
-        if !seen.insert(name.to_owned()) {
-            return Err(CliError::Input(format!("{name}は一度だけ指定してください")));
-        }
-        let value = match inline_value {
-            Some(value) => value.to_owned(),
-            None => {
-                let value = args.next().ok_or_else(|| missing_value(name))?;
-                let value = argument_string(value)?;
-                if value.starts_with("--") || value == "-h" {
-                    return Err(missing_value(name));
-                }
-                value
-            }
-        };
-        match name {
-            "--length" => length = Some(positive_integer(name, &value)?),
-            "--max-length" => max_output_length = Some(positive_integer(name, &value)?),
-            "--group-size" => group_size = number(name, &value)?,
-            "--min-entropy" => {
-                let bits: f64 = number(name, &value)?;
-                if !bits.is_finite() || bits <= 0.0 {
-                    return Err(CliError::Input(
-                        "--min-entropyには有限の正の値を指定してください".to_owned(),
-                    ));
-                }
-                min_entropy = Some(bits);
-            }
-            "--base" => bases = parse_bases(&value)?,
-            _ => return Err(unknown_argument(name)),
-        }
-    }
-
-    let length_policy = match (length, min_entropy, max_output_length) {
-        (Some(_), Some(_), _) => {
-            return Err(CliError::Input(
-                "--lengthと--min-entropyは同時指定できません".to_owned(),
-            ));
-        }
-        (Some(length), None, _) => LengthPolicy::Exact(length),
-        (None, Some(bits), _) => LengthPolicy::MinEntropy(bits),
+    // lengthを省略したかどうかで方針が変わるため、既定値は解析後に適用する。
+    let length_policy = match (args.length, args.min_entropy, args.max_length) {
+        (Some(length), _, _) => LengthPolicy::Exact(length),
+        (_, Some(bits), _) => LengthPolicy::MinEntropy(bits),
         (None, None, Some(_)) => LengthPolicy::FitToMaxOutput,
         (None, None, None) => defaults.length_policy,
     };
     Ok(Command::Generate {
         options: PasswordOptions {
             length_policy,
-            max_output_length,
-            group_size,
+            max_output_length: args.max_length,
+            group_size: args.group_size.unwrap_or(defaults.group_size),
         },
-        bases,
+        bases: args.base.bases(),
     })
 }
 
@@ -229,48 +222,20 @@ fn all_bases() -> Vec<Base> {
     vec![Base::Base10, Base::Base26, Base::Base36, Base::Base62]
 }
 
-fn parse_bases(value: &str) -> Result<Vec<Base>, CliError> {
-    match value {
-        "10" => Ok(vec![Base::Base10]),
-        "26" => Ok(vec![Base::Base26]),
-        "36" => Ok(vec![Base::Base36]),
-        "62" => Ok(vec![Base::Base62]),
-        "all" => Ok(all_bases()),
-        _ => Err(CliError::Input(
-            "--baseには10 / 26 / 36 / 62 / allを指定してください".to_owned(),
-        )),
-    }
-}
-
-fn argument_string(arg: OsString) -> Result<String, CliError> {
-    arg.into_string()
-        .map_err(|_| CliError::Input("引数にはUTF-8の文字列を指定してください".to_owned()))
-}
-
-fn number<T: FromStr>(name: &str, value: &str) -> Result<T, CliError> {
-    value
-        .parse()
-        .map_err(|_| CliError::Input(format!("{name}の値が不正です: {value}")))
-}
-
-fn positive_integer(name: &str, value: &str) -> Result<usize, CliError> {
-    let value = number(name, value)?;
+fn positive_integer(value: &str) -> Result<usize, String> {
+    let value = value.parse::<usize>().map_err(|error| error.to_string())?;
     if value == 0 {
-        return Err(CliError::Input(format!(
-            "{name}には1以上を指定してください"
-        )));
+        return Err("1以上を指定してください".to_owned());
     }
     Ok(value)
 }
 
-fn unknown_argument(name: &str) -> CliError {
-    CliError::Input(format!(
-        "不明な引数です: {name}（--helpで使い方を確認できます）"
-    ))
-}
-
-fn missing_value(name: &str) -> CliError {
-    CliError::Input(format!("{name}の値が必要です"))
+fn positive_entropy(value: &str) -> Result<f64, String> {
+    let bits = value.parse::<f64>().map_err(|error| error.to_string())?;
+    if !bits.is_finite() || bits <= 0.0 {
+        return Err("有限の正の値を指定してください".to_owned());
+    }
+    Ok(bits)
 }
 
 #[cfg(test)]
