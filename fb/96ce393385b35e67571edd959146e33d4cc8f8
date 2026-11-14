@@ -1,0 +1,32 @@
+AGENTS.md
+  h_c688ca482ab56a 1-31
+Cargo.lock
+  h_c688ca482ab56a 5-10,17-54,59,74-79,86-103,109-125
+Cargo.toml
+  h_c688ca482ab56a 7
+README.md
+  h_c688ca482ab56a 1-200
+scripts/serve_coverage.py
+  h_c688ca482ab56a 1-64
+src/cli.rs
+  h_c688ca482ab56a 1-319
+src/lib.rs
+  h_c688ca482ab56a 1,20-26,30,32-58,62,118-133,139,149,151-190,194-234,247,258,280,291,299,309
+src/main.rs
+  h_c688ca482ab56a 1,3-7,9,11-24,27-31,33-35
+src/plan.rs
+  h_c688ca482ab56a 1-687
+tests/cli.rs
+  h_c688ca482ab56a 1-280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb96ce393385b35e67571edd959146e33d4cc8f8",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
