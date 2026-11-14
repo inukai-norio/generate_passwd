@@ -1,0 +1,19 @@
+AGENTS.md
+  s_e6c4a70912c8d0::t_2a3649ace23d5a 14-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79a2a7310358d7ba83338637acb6f801f3177d4b",
+  "prompts": {},
+  "sessions": {
+    "s_e6c4a70912c8d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19652-a485-71e0-b7fa-c2b821ecdb8a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
