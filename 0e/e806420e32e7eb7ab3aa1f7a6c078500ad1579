@@ -1,0 +1,19 @@
+about.hbs
+  s_769cf349f189fd::t_9b9cee8ed13fdf 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ee806420e32e7eb7ab3aa1f7a6c078500ad1579",
+  "prompts": {},
+  "sessions": {
+    "s_769cf349f189fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1dd33-d986-7612-b501-c46b1b0fb91d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
