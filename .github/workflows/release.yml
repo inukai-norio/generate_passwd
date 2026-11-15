@@ -42,8 +42,39 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-  build:
+  licenses:
+    name: Generate license HTML
     needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Set up stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked
+
+      - name: Generate license HTML
+        run: |
+          cargo about generate --locked --fail --output-file LICENSES.html about.hbs
+          test -s LICENSES.html
+
+      - name: Upload license artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: license-notices
+          path: LICENSES.html
+          if-no-files-found: error
+
+  build:
+    needs: [check, licenses]
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
