@@ -1,0 +1,30 @@
+src/plan/tests.rs
+  s_769cf349f189fd::t_93da4027890bc1 1-333
+src/tests.rs
+  s_769cf349f189fd::t_93da4027890bc1 1-96,98-227
+  s_769cf349f189fd::t_7a8b187a46ab8c 97
+src/cli.rs
+  s_769cf349f189fd::t_d25fb5da4688ab 242
+src/plan.rs
+  s_769cf349f189fd::t_d25fb5da4688ab 353
+src/lib.rs
+  s_769cf349f189fd::t_d25fb5da4688ab 90
+src/cli/tests.rs
+  s_769cf349f189fd::t_93da4027890bc1 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6dfa2d00ecb73570703a173873cbf1dff372f56",
+  "prompts": {},
+  "sessions": {
+    "s_769cf349f189fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1dd33-d986-7612-b501-c46b1b0fb91d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
