@@ -14,8 +14,30 @@ env:
   RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
 
 jobs:
-  check:
+  version:
+    name: Check package version change
     if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare package versions
+        id: compare
+        env:
+          BEFORE_SHA: ${{ github.event.pull_request.base.sha }}
+          AFTER_SHA: ${{ env.RELEASE_SHA }}
+        run: python3 .github/scripts/check_release_version.py
+
+  check:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.event.pull_request.merge_commit_sha }}
