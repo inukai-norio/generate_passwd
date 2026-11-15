@@ -59,10 +59,14 @@ jobs:
           rustup default stable
 
       - name: Install cargo-about
-        run: cargo install cargo-about --locked
+        run: |
+          cargo install cargo-about --locked --root "$RUNNER_TEMP/cargo-about"
+          test -x "$RUNNER_TEMP/cargo-about/bin/cargo-about"
+          printf '%s\n' "$RUNNER_TEMP/cargo-about/bin" >> "$GITHUB_PATH"
 
       - name: Generate license HTML
         run: |
+          cargo about --version
           cargo about generate --locked --fail --output-file LICENSES.html about.hbs
           test -s LICENSES.html
 
