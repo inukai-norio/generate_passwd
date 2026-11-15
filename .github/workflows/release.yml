@@ -62,7 +62,7 @@ jobs:
 
       - name: Install cargo-about
         run: |
-          cargo install cargo-about --locked --root "$RUNNER_TEMP/cargo-about"
+          cargo install cargo-about --locked --features cli --root "$RUNNER_TEMP/cargo-about"
           test -x "$RUNNER_TEMP/cargo-about/bin/cargo-about"
           printf '%s\n' "$RUNNER_TEMP/cargo-about/bin" >> "$GITHUB_PATH"
 
