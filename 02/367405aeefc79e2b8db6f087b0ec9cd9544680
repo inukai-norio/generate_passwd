@@ -1,0 +1,16 @@
+about.hbs
+  h_c688ca482ab56a 1-70
+about.toml
+  h_c688ca482ab56a 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "02367405aeefc79e2b8db6f087b0ec9cd9544680",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
