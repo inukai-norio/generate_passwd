@@ -1,0 +1,14 @@
+README.md
+  h_c688ca482ab56a 195-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2630437109595595ae8aa80a3bff95979ef91f17",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
