@@ -102,6 +102,17 @@ jobs:
           ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
+      - name: Download license artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: license-notices
+          path: license-docs
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
       - name: Set up stable Rust
         shell: bash
         run: |
@@ -121,19 +132,42 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo build --locked --release --target ${{ matrix.target }}
 
+      - name: Check package inputs
+        shell: bash
+        env:
+          PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY"
+
       - name: Package Linux and macOS binary
         if: runner.os != 'Windows'
         run: |
-          zip --junk-paths "$BINARY_NAME-${{ matrix.target }}.zip" \
-            "target/${{ matrix.target }}/release/$BINARY_NAME"
+          archive="$BINARY_NAME-${{ matrix.target }}.zip"
+          test ! -e "$archive"
+          zip -MM --junk-paths "$archive" \
+            "target/${{ matrix.target }}/release/$BINARY_NAME" \
+            README.md TEST_CODE_LICENSE license-docs/LICENSES.html
 
       - name: Package Windows binary
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $packageFiles = @(
+            "target/${{ matrix.target }}/release/${env:BINARY_NAME}.exe"
+            "README.md"
+            "TEST_CODE_LICENSE"
+            "license-docs/LICENSES.html"
+          )
           Compress-Archive `
-            -Path "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" `
-            -DestinationPath "$env:BINARY_NAME-${{ matrix.target }}.zip"
+            -LiteralPath $packageFiles `
+            -DestinationPath "${env:BINARY_NAME}-${{ matrix.target }}.zip" `
+            -ErrorAction Stop
+
+      - name: Check package archive
+        shell: bash
+        env:
+          PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
+          PACKAGE_ARCHIVE: ${{ env.BINARY_NAME }}-${{ matrix.target }}.zip
+        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY" --archive "$PACKAGE_ARCHIVE"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
