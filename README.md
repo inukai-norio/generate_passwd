@@ -1,6 +1,21 @@
+<!-- SPDX-License-Identifier: ISC -->
+<!-- Copyright (c) 2026 inukai-norio <inukay@proton.me> -->
+
 # generate_passwd
 
 OSの暗号学的に安全な乱数を使う、パスワード生成CLIとRustライブラリです。ランダム部分の固定文字数、最小エントロピー、ハイフン込みの最大出力文字数を指定できます。
+
+## ライセンス
+
+本パッケージは `AGPL-3.0-or-later` で公開しています。README全体、テストコード、API文書内のコード例にはISCライセンスを適用します。
+
+| 対象 | ライセンス | 本文 |
+| --- | --- | --- |
+| CLI・Rustライブラリの本体、ソース内のAPI文書の説明文 | GNU Affero General Public License v3.0 or later（`AGPL-3.0-or-later`） | [LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/LICENSE) |
+| 単体テストと補助コード（`src/lib.rs`、`src/cli.rs`、`src/plan.rs` 内の `#[cfg(test)] mod tests`）、統合テスト（`tests/`） | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
+| README全体（API文書への取り込み部分を含む）、API文書内のコード例 | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
+
+依存ライブラリには、それぞれのライセンスが適用されます。
 
 ## CLIの使い方
 

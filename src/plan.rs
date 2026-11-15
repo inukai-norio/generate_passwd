@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (c) 2026 inukai-norio <inukay@proton.me>
+// Unit tests in mod tests are licensed under ISC; see TEST_CODE_LICENSE.
+// Documentation code examples are licensed under ISC; see TEST_CODE_LICENSE.
+
 use std::{error::Error, fmt, marker::PhantomData};
 
 use crate::{OsRandom, PasswordBase, RandomSource, entropy_bits, generate_password_with};
@@ -349,6 +354,10 @@ fn max_random_length(max_output_length: usize, group_size: usize) -> usize {
     max_output_length - max_output_length / (group_size + 1)
 }
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 inukai-norio <inukay@proton.me>
+// SPDX-License-Identifier: ISC
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -685,3 +694,4 @@ mod tests {
         ));
     }
 }
+// SPDX-SnippetEnd
