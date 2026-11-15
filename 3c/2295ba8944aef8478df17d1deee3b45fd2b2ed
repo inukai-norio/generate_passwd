@@ -1,0 +1,14 @@
+LICENSE
+  h_c688ca482ab56a 1-661
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3c2295ba8944aef8478df17d1deee3b45fd2b2ed",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
