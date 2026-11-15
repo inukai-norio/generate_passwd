@@ -1,0 +1,19 @@
+.github/workflows/release.yml
+  s_769cf349f189fd::t_c17e82d4c68fcf 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26a85ba97f9a7818c71e47fd1ad8037ad0cb8c37",
+  "prompts": {},
+  "sessions": {
+    "s_769cf349f189fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1dd33-d986-7612-b501-c46b1b0fb91d",
+        "model": "unknown"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
