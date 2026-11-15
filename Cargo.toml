@@ -1,7 +1,10 @@
 [package]
 name = "generate_passwd"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
+repository = "https://github.com/inukai-norio/generate_passwd"
+# テストと文書内のコード例のISC許諾はREADME.mdを参照。
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 clap = { version = "4.6", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }

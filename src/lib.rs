@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (c) 2026 inukai-norio <inukay@proton.me>
+// Unit tests in mod tests are licensed under ISC; see TEST_CODE_LICENSE.
+// Documentation code examples are licensed under ISC; see TEST_CODE_LICENSE.
+
 #![doc = include_str!("../README.md")]
 
 /// パスワード生成に必要な乱数取得のインターフェース。
@@ -85,6 +90,10 @@ define_base!(
 pub fn entropy_bits<B: PasswordBase>(length: usize) -> f64 {
     length as f64 * (B::ALPHABET.len() as f64).log2()
 }
+
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 inukai-norio <inukay@proton.me>
+// SPDX-License-Identifier: ISC
 
 #[cfg(test)]
 mod tests {
@@ -317,3 +326,4 @@ mod tests {
         assert_eq!(entropy_bits::<Base10>(0), 0.0);
     }
 }
+// SPDX-SnippetEnd

@@ -10,18 +10,71 @@ permissions:
 
 env:
   BINARY_NAME: generate_passwd
-  RELEASE_TAG: release-${{ github.run_number }}
   RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
 
 jobs:
-  check:
+  version:
+    name: Check package version change
     if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      version: ${{ steps.compare.outputs.version }}
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare package versions
+        id: compare
+        env:
+          BEFORE_SHA: ${{ github.event.pull_request.base.sha }}
+          AFTER_SHA: ${{ env.RELEASE_SHA }}
+        run: python3 .github/scripts/check_release_version.py
+
+  check:
+    needs: version
+    if: needs.version.outputs.changed == 'true'
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-  build:
+  licenses:
+    name: Generate license HTML
     needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+
+      - name: Set up stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked
+
+      - name: Generate license HTML
+        run: |
+          cargo about generate --locked --fail --output-file LICENSES.html about.hbs
+          test -s LICENSES.html
+
+      - name: Upload license artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: license-notices
+          path: LICENSES.html
+          if-no-files-found: error
+
+  build:
+    needs: [check, licenses]
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -49,6 +102,17 @@ jobs:
           ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
+      - name: Download license artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: license-notices
+          path: license-docs
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
       - name: Set up stable Rust
         shell: bash
         run: |
@@ -68,19 +132,42 @@ jobs:
         if: runner.os != 'Linux'
         run: cargo build --locked --release --target ${{ matrix.target }}
 
+      - name: Check package inputs
+        shell: bash
+        env:
+          PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY"
+
       - name: Package Linux and macOS binary
         if: runner.os != 'Windows'
         run: |
-          zip --junk-paths "$BINARY_NAME-${{ matrix.target }}.zip" \
-            "target/${{ matrix.target }}/release/$BINARY_NAME"
+          archive="$BINARY_NAME-${{ matrix.target }}.zip"
+          test ! -e "$archive"
+          zip -MM --junk-paths "$archive" \
+            "target/${{ matrix.target }}/release/$BINARY_NAME" \
+            README.md TEST_CODE_LICENSE license-docs/LICENSES.html
 
       - name: Package Windows binary
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $packageFiles = @(
+            "target/${{ matrix.target }}/release/${env:BINARY_NAME}.exe"
+            "README.md"
+            "TEST_CODE_LICENSE"
+            "license-docs/LICENSES.html"
+          )
           Compress-Archive `
-            -Path "target/${{ matrix.target }}/release/$env:BINARY_NAME.exe" `
-            -DestinationPath "$env:BINARY_NAME-${{ matrix.target }}.zip"
+            -LiteralPath $packageFiles `
+            -DestinationPath "${env:BINARY_NAME}-${{ matrix.target }}.zip" `
+            -ErrorAction Stop
+
+      - name: Check package archive
+        shell: bash
+        env:
+          PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
+          PACKAGE_ARCHIVE: ${{ env.BINARY_NAME }}-${{ matrix.target }}.zip
+        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY" --archive "$PACKAGE_ARCHIVE"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -91,8 +178,10 @@ jobs:
 
   release:
     name: Publish release
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.version }}
     permissions:
       contents: write
     steps:

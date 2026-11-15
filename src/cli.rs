@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (c) 2026 inukai-norio <inukay@proton.me>
+// Unit tests in mod tests are licensed under ISC; see TEST_CODE_LICENSE.
+
 use std::{ffi::OsString, fmt, process::ExitCode};
 
 use clap::{Parser, ValueEnum, error::ErrorKind};
@@ -238,6 +242,10 @@ fn positive_entropy(value: &str) -> Result<f64, String> {
     Ok(bits)
 }
 
+// SPDX-SnippetBegin
+// SPDX-SnippetCopyrightText: 2026 inukai-norio <inukay@proton.me>
+// SPDX-License-Identifier: ISC
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,3 +325,4 @@ mod tests {
         assert_eq!(random.calls, 0);
     }
 }
+// SPDX-SnippetEnd

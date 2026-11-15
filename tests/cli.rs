@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: ISC
+// Copyright (c) 2026 inukai-norio <inukay@proton.me>
+
 use std::process::{Command, Output};
 
 fn run(args: &[&str]) -> Output {
