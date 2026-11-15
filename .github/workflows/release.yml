@@ -10,7 +10,6 @@ permissions:
 
 env:
   BINARY_NAME: generate_passwd
-  RELEASE_TAG: release-${{ github.run_number }}
   RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
 
 jobs:
@@ -20,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
+      version: ${{ steps.compare.outputs.version }}
     steps:
       - name: Checkout merged commit
         uses: actions/checkout@v7
@@ -113,8 +113,10 @@ jobs:
 
   release:
     name: Publish release
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs.version.outputs.version }}
     permissions:
       contents: write
     steps:

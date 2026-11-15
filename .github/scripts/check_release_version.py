@@ -25,6 +25,7 @@ def main():
     changed = str(before != after).lower()
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write(f"changed={changed}\n")
+        output.write(f"version={after}\n")
     print(f"package.version: {before} -> {after} (changed={changed})")
 
 
