@@ -1,0 +1,16 @@
+Cargo.lock
+  h_c688ca482ab56a 57
+Cargo.toml
+  h_c688ca482ab56a 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "abd5108e4b422c7c76099c0018f7bb7141c64118",
+  "prompts": {},
+  "humans": {
+    "h_c688ca482ab56a": {
+      "author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
