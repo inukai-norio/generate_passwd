@@ -1,0 +1,22 @@
+.github/workflows/release.yml
+  s_769cf349f189fd::t_21ce55886d3f1e 17-18,20-35,37-40
+  s_769cf349f189fd::t_bdea17177ef7ad 36
+.github/scripts/check_release_version.py
+  s_769cf349f189fd::t_bdea17177ef7ad 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "74fab86a997362df16cb52fe2811b0ee3b71f159",
+  "prompts": {},
+  "sessions": {
+    "s_769cf349f189fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1dd33-d986-7612-b501-c46b1b0fb91d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
