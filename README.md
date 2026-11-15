@@ -5,18 +5,6 @@
 
 OSの暗号学的に安全な乱数を使う、パスワード生成CLIとRustライブラリです。ランダム部分の固定文字数、最小エントロピー、ハイフン込みの最大出力文字数を指定できます。
 
-## ライセンス
-
-本パッケージは `AGPL-3.0-or-later` で公開しています。README全体、テストコード、API文書内のコード例にはISCライセンスを適用します。
-
-| 対象 | ライセンス | 本文 |
-| --- | --- | --- |
-| CLI・Rustライブラリの本体、ソース内のAPI文書の説明文 | GNU Affero General Public License v3.0 or later（`AGPL-3.0-or-later`） | [LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/LICENSE) |
-| 単体テストと補助コード（`src/lib.rs`、`src/cli.rs`、`src/plan.rs` 内の `#[cfg(test)] mod tests`）、統合テスト（`tests/`） | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
-| README全体（API文書への取り込み部分を含む）、API文書内のコード例 | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
-
-依存ライブラリには、それぞれのライセンスが適用されます。
-
 ## CLIの使い方
 
 RustのstableツールチェーンとCargoを使用します。CIでもstableで検証しています。リポジトリのディレクトリで、次のコマンドを実行してください。
@@ -166,39 +154,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 独自の`PasswordBase`も使用できます。`ALPHABET`は重複のない1〜128文字のASCIIである必要があり、計画作成時に検証します。1文字だけの文字集合でも固定長生成はできますが、正のエントロピーは実現できません。
 
-## 旧APIからの移行（破壊的変更）
-
-旧APIの以下のメソッドは削除しました。
-
-```text
-Base62::generate_password(20, 4)?;
-Base62::generate_password_with(20, 4, &mut random)?;
-```
-
-固定長20文字・区切り幅4で生成する場合は、次のように移行してください。
-
-```rust
-use generate_passwd::{Base62, LengthPolicy, PasswordOptions, plan_password};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let options = PasswordOptions {
-        length_policy: LengthPolicy::Exact(20),
-        max_output_length: None,
-        group_size: 4,
-    };
-    let plan = plan_password::<Base62>(&options)?;
-    let password = plan.generate()?;
-    assert_eq!(password.len(), 24);
-    Ok(())
-}
-```
-
-呼び出し側の乱数源を使う場合は、同じ手順で計画を作り、最後の生成を`plan.generate_with(&mut random)`へ変更します。`RandomSource`のインターフェイスは維持しています。
-
-0文字生成はエラーになります。計算関数`entropy_bits::<B>(0)`が0を返す挙動は維持しています。`PasswordBase`は文字集合の定義を担い、生成は計画のメソッドから行います。偏りを避ける棄却法も維持しています。
-
-CLIは従来無視していた引数を解釈し、未知の引数や不正な指定をエラーにします。引数なしの出力形式、Baseの順序、ランダム部分20文字・区切り幅4は維持しています。乱数エラー時は途中の生成結果を表示しない動作になりました。
-
 ## 開発時の確認
 
 Rustのstableツールチェーンを使用します。初回は必要なコンポーネントを追加してください。
@@ -237,3 +192,15 @@ RA_LOG=project_model=info,proc_macro_api=info rustup run stable rust-analyzer di
 単体テストでは固定乱数やエラーを返す乱数源を使い、文字の選択・棄却・区切り位置・エラーの伝播を再現します。最小エントロピーでは、求めた文字数が要求を満たし、1文字減らすと不足することを確認します。最大文字数では、上限内に収まり、1文字増やすと上限を超えることを確認します。
 
 CLI統合テストでは実行ファイルを起動し、文字集合、長さ、標準出力・標準エラー出力、終了コードを確認します。生成されるパスワードそのものを固定値とは比較しません。一部のテストはUnixまたはLinux限定です。
+
+## ライセンス
+
+本パッケージは `AGPL-3.0-or-later` で公開しています。README全体、テストコード、API文書内のコード例にはISCライセンスを適用します。
+
+| 対象 | ライセンス | 本文 |
+| --- | --- | --- |
+| CLI・Rustライブラリの本体、ソース内のAPI文書の説明文 | GNU Affero General Public License v3.0 or later（`AGPL-3.0-or-later`） | [LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/LICENSE) |
+| 単体テストと補助コード（`src/lib.rs`、`src/cli.rs`、`src/plan.rs` 内の `#[cfg(test)] mod tests`）、統合テスト（`tests/`） | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
+| README全体（API文書への取り込み部分を含む）、API文書内のコード例 | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
+
+依存ライブラリには、それぞれのライセンスが適用されます。
