@@ -186,12 +186,36 @@ CLIは従来無視していた引数を解釈し、未知の引数や不正な�
 
 ## 開発時の確認
 
+Rustのstableツールチェーンを使用します。初回は必要なコンポーネントを追加してください。
+
+```sh
+rustup component add --toolchain stable rustfmt clippy rust-analyzer rust-src
+```
+
+CIでは整形、Clippy、rust-analyzerの診断、テストを順に実行します。ローカルでも次のコマンドで確認できます。
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets -- -D warnings
+rustup run stable rust-analyzer --version
+rustup run stable rust-analyzer diagnostics . --severity warning
 cargo test --locked
 cargo doc --locked --no-deps
 ```
+
+rust-analyzerはstableに導入した本体を明示的に使い、CLIの`diagnostics`で警告以上の診断をファイル・位置・メッセージ付きで表示します。警告だけなら成功、エラーや起動失敗は非ゼロ終了となり、CIも失敗します。
+
+このCLIでは診断ルールを設定ファイルで指定できず、VSCodeの設定も読み込みません。rust-analyzer 1.100.0での確認では、`#[cfg(test)]`内や`#[test]`関数内の一部の型エラーが未検出でした。既存のClippyと`cargo test`も実行して検証します。なお、CIのClippyは`-D warnings`を指定しているため、Clippyの警告はCI失敗として扱います。
+
+CLIサブコマンドには安定性保証がないため、Rust更新時はバージョンと`rustup run stable rust-analyzer --help`を確認してください。
+
+標準ライブラリやderiveマクロの読み込みに失敗する場合は、`rustup show active-toolchain`と`rustup component list --toolchain stable --installed`でツールチェーンとコンポーネントを確認してください。`rust-src`が同じstableに存在することを確認し、次のコマンドでsysroot・build script・proc macroの読み込みログを取得できます。診断を消すためだけにコードを書き換える前に、読み込み状況を確認してください。
+
+```sh
+RA_LOG=project_model=info,proc_macro_api=info rustup run stable rust-analyzer diagnostics . --severity warning
+```
+
+上の環境変数指定はUnix系シェル向けです。PowerShellでは先に`$env:RA_LOG = 'project_model=info,proc_macro_api=info'`を設定してから診断コマンドを実行してください。
 
 生成されたAPIドキュメントは`target/doc/generate_passwd/index.html`から参照できます。このREADMEのRustコード例も、ドキュメントテストで検証します。
 

@@ -28,7 +28,7 @@ jobs:
 
       - name: Set up stable Rust
         run: |
-          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy --component rust-analyzer --component rust-src --no-self-update
           rustup default stable
 
       - name: Check formatting
@@ -36,6 +36,11 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run rust-analyzer diagnostics
+        run: |
+          rustup run stable rust-analyzer --version
+          rustup run stable rust-analyzer diagnostics . --severity warning
 
       - name: Run unit tests and documentation tests
         run: cargo test --locked
