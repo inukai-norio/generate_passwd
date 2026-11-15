@@ -1,6 +1,7 @@
 name: Build and release
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     types: [closed]
@@ -10,12 +11,12 @@ permissions:
 
 env:
   BINARY_NAME: generate_passwd
-  RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+  RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
 jobs:
   version:
     name: Check package version change
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
@@ -31,16 +32,17 @@ jobs:
       - name: Compare package versions
         id: compare
         env:
-          BEFORE_SHA: ${{ github.event.pull_request.base.sha }}
+          # 手動時は同じコミットを比較し、タグ用のバージョンだけ取得する。
+          BEFORE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.pull_request.base.sha }}
           AFTER_SHA: ${{ env.RELEASE_SHA }}
         run: python3 .github/scripts/check_release_version.py
 
   check:
     needs: version
-    if: needs.version.outputs.changed == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.version.outputs.changed == 'true'
     uses: ./.github/workflows/ci.yml
     with:
-      ref: ${{ github.event.pull_request.merge_commit_sha }}
+      ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
   licenses:
     name: Generate license HTML
@@ -59,10 +61,14 @@ jobs:
           rustup default stable
 
       - name: Install cargo-about
-        run: cargo install cargo-about --locked
+        run: |
+          cargo install cargo-about --locked --root "$RUNNER_TEMP/cargo-about"
+          test -x "$RUNNER_TEMP/cargo-about/bin/cargo-about"
+          printf '%s\n' "$RUNNER_TEMP/cargo-about/bin" >> "$GITHUB_PATH"
 
       - name: Generate license HTML
         run: |
+          cargo about --version
           cargo about generate --locked --fail --output-file LICENSES.html about.hbs
           test -s LICENSES.html
 
