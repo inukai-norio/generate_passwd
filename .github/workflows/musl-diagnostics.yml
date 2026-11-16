@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: ISC
+# Copyright 2026 inukai-norio <inukay@proton.me>
+# License text: TEST_CODE_LICENSE
+name: Investigate musl linkage
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  investigate:
+    name: Investigate ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+          - i686-unknown-linux-musl
+    env:
+      TARGET: ${{ matrix.target }}
+      DIAGNOSTICS_DIR: target/musl-diagnostics
+    steps:
+      - name: Checkout selected commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Prepare diagnostics directory
+        run: mkdir -p "$DIAGNOSTICS_DIR"
+
+      - name: Set up stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add "$TARGET"
+
+      - name: Install cross
+        run: |
+          cargo install cross --locked --git https://github.com/cross-rs/cross \
+            2>&1 | tee "$DIAGNOSTICS_DIR/cross-install.log"
+
+      - name: Build and collect musl diagnostics
+        run: bash .github/scripts/collect_musl_diagnostics.sh "$TARGET" "$DIAGNOSTICS_DIR"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: musl-diagnostics-${{ matrix.target }}
+          path: ${{ env.DIAGNOSTICS_DIR }}
+          if-no-files-found: error
