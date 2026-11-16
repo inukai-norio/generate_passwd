@@ -83,6 +83,8 @@ jobs:
     needs: [check, licenses]
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    env:
+      PACKAGE_TARGET: ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
@@ -142,16 +144,23 @@ jobs:
         shell: bash
         env:
           PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
-        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY"
+        run: |
+          python .github/scripts/check_release_package.py \
+            --target "$PACKAGE_TARGET" --binary "$PACKAGE_BINARY"
 
       - name: Package Linux and macOS binary
         if: runner.os != 'Windows'
         run: |
           archive="$BINARY_NAME-${{ matrix.target }}.zip"
           test ! -e "$archive"
-          zip -MM --junk-paths "$archive" \
-            "target/${{ matrix.target }}/release/$BINARY_NAME" \
+          package_files=(
+            "target/${{ matrix.target }}/release/$BINARY_NAME"
             README.md TEST_CODE_LICENSE license-docs/LICENSES.html
+          )
+          if [[ "$PACKAGE_TARGET" == *-linux-musl ]]; then
+            package_files+=(MUSL_LICENSE)
+          fi
+          zip -MM --junk-paths "$archive" "${package_files[@]}"
 
       - name: Package Windows binary
         if: runner.os == 'Windows'
@@ -173,7 +182,9 @@ jobs:
         env:
           PACKAGE_BINARY: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}${{ runner.os == 'Windows' && '.exe' || '' }}
           PACKAGE_ARCHIVE: ${{ env.BINARY_NAME }}-${{ matrix.target }}.zip
-        run: python .github/scripts/check_release_package.py --binary "$PACKAGE_BINARY" --archive "$PACKAGE_ARCHIVE"
+        run: |
+          python .github/scripts/check_release_package.py \
+            --target "$PACKAGE_TARGET" --binary "$PACKAGE_BINARY" --archive "$PACKAGE_ARCHIVE"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
