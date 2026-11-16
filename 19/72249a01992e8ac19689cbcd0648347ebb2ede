@@ -1,0 +1,19 @@
+README.md
+  s_769cf349f189fd::t_4b8b98c4752bc4 8-35,38,42,45,48,51,54,57,59,120,139-149,152-153,248-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1972249a01992e8ac19689cbcd0648347ebb2ede",
+  "prompts": {},
+  "sessions": {
+    "s_769cf349f189fd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1dd33-d986-7612-b501-c46b1b0fb91d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "inukai-norio <inukay@proton.me>"
+    }
+  }
+}
