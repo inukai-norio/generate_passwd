@@ -10,13 +10,15 @@ import zipfile
 from pathlib import Path
 
 
-def package_files(binary):
+def package_files(binary, target):
     files = [
         binary,
         Path("README.md"),
         Path("TEST_CODE_LICENSE"),
         Path("license-docs/LICENSES.html"),
     ]
+    if target.endswith("-linux-musl"):
+        files.append(Path("MUSL_LICENSE"))
     for path in files:
         if not path.is_file() or path.stat().st_size == 0:
             raise ValueError(f"Required package file is missing or empty: {path}")
@@ -38,17 +40,18 @@ def check_archive(path, files):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", required=True)
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--archive", type=Path)
     args = parser.parse_args()
     try:
-        files = package_files(args.binary)
+        files = package_files(args.binary, args.target)
         if args.archive is not None:
             check_archive(args.archive, files)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         print(error, file=sys.stderr)
         return 1
-    print(f"Verified 4 package files: {args.archive or 'inputs'}")
+    print(f"Verified {len(files)} package files: {args.archive or 'inputs'}")
     return 0
 
 
