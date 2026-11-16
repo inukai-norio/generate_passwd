@@ -5,30 +5,58 @@
 
 OSの暗号学的に安全な乱数を使う、パスワード生成CLIとRustライブラリです。ランダム部分の固定文字数、最小エントロピー、ハイフン込みの最大出力文字数を指定できます。
 
+## 配布版の導入
+
+[GitHub Releases](https://github.com/inukai-norio/generate_passwd/releases) から、OSとCPUに合うZIPをダウンロードしてください。配布版のCLIを実行するためにRustやCargoをインストールする必要はありません。
+
+| OS | CPU | ZIPファイル |
+| --- | --- | --- |
+| Linux | x86_64 / AMD64（64ビット） | `generate_passwd-x86_64-unknown-linux-musl.zip` |
+| Linux | ARM64 / AArch64 | `generate_passwd-aarch64-unknown-linux-musl.zip` |
+| Linux | x86（32ビット） | `generate_passwd-i686-unknown-linux-musl.zip` |
+| macOS | Intel | `generate_passwd-x86_64-apple-darwin.zip` |
+| macOS | Apple Silicon | `generate_passwd-aarch64-apple-darwin.zip` |
+| Windows | x64（64ビット） | `generate_passwd-x86_64-pc-windows-msvc.zip` |
+| Windows | x86（32ビット） | `generate_passwd-i686-pc-windows-msvc.zip` |
+
+ZIPを展開し、展開先のディレクトリでターミナルを開きます。Linux・macOSでは、実行権限を付けて起動します。
+
+```sh
+chmod +x ./generate_passwd
+./generate_passwd --help
+```
+
+Windowsでは、展開先のディレクトリでPowerShellを開いて起動します。
+
+```powershell
+.\generate_passwd.exe --help
+.\generate_passwd.exe --base 62 --min-entropy 128 --max-length 32
+```
+
 ## CLIの使い方
 
-RustのstableツールチェーンとCargoを使用します。CIでもstableで検証しています。リポジトリのディレクトリで、次のコマンドを実行してください。
+以下はLinux・macOSでの例です。WindowsのPowerShellでは、先頭の `./generate_passwd` を `.\generate_passwd.exe` に置き換えてください。
 
 ```sh
 # 引数なし: 全Base、ランダム部分20文字、4文字ごとにハイフン
-cargo run --locked --
+./generate_passwd
 
 # Base62で128ビット以上、ハイフン込みで32文字以下
-cargo run --locked -- --base 62 --min-entropy 128 --max-length 32
+./generate_passwd --base 62 --min-entropy 128 --max-length 32
 
 # 区切りなしなら、Base62の128ビット以上を22文字で生成できる
-cargo run --locked -- --base 62 --min-entropy 128 --max-length 22 --group-size 0
+./generate_passwd --base 62 --min-entropy 128 --max-length 22 --group-size 0
 
 # 最大24文字に収まる最多のランダム文字を使う
-cargo run --locked -- --base 62 --max-length 24
+./generate_passwd --base 62 --max-length 24
 
 # ランダム部分を正確に20文字とし、出力上限も検証する
-cargo run --locked -- --base 62 --length 20 --max-length 24
+./generate_passwd --base 62 --length 20 --max-length 24
 
 # 上限5文字・区切り幅4では、末尾ハイフンを付けず4文字で出力する
-cargo run --locked -- --base 62 --max-length 5
+./generate_passwd --base 62 --max-length 5
 
-cargo run --locked -- --help
+./generate_passwd --help
 ```
 
 Base62・128ビット以上・区切り幅4の出力例です。パスワード部分は省略しています。
@@ -89,7 +117,7 @@ Base62: （生成されたパスワード）
 
 ```sh
 # 終了コード2。パスワードは標準出力に出さない
-cargo run --locked -- --base 10 --min-entropy 128 --max-length 32
+./generate_passwd --base 10 --min-entropy 128 --max-length 32
 ```
 
 エラーには必要なランダム文字数、ハイフン込みの出力文字数、指定上限と、その上限内で達成できるエントロピーが表示されます。
@@ -108,7 +136,20 @@ cargo run --locked -- --base 10 --min-entropy 128 --max-length 32
 
 正常結果とヘルプは標準出力、エラーは標準エラー出力へ書き込みます。
 
+## ソースからのビルド
+
+RustのstableツールチェーンとCargoを用意し、このリポジトリを取得したディレクトリで実行します。CIでもstableを使用しています。
+
+```sh
+cargo build --locked --release
+cargo run --locked --release -- --help
+```
+
+生成される実行ファイルは、Linux・macOSでは `target/release/generate_passwd`、Windowsでは `target\release\generate_passwd.exe` です。配布版と同じCLIオプションを使用できます。
+
 ## ライブラリAPI
+
+この節は、Rustプロジェクトから本ライブラリを利用する場合の説明です。
 
 生成条件を`PasswordOptions`で指定し、`plan_password`で検証済みの計画を作ります。計画作成では乱数を取得せず、`generate()`を呼んだ時点で生成します。
 
@@ -204,3 +245,7 @@ CLI統合テストでは実行ファイルを起動し、文字集合、長さ�
 | README全体（API文書への取り込み部分を含む）、API文書内のコード例 | ISC（`ISC`） | [TEST_CODE_LICENSE](https://github.com/inukai-norio/generate_passwd/blob/main/TEST_CODE_LICENSE) |
 
 依存ライブラリには、それぞれのライセンスが適用されます。
+
+配布ZIPには、本体とRust依存クレートのライセンス本文・著作権表示をまとめた `LICENSES.html` と、READMEなどのISC許諾を示す `TEST_CODE_LICENSE` を同梱しています。`LICENSES.html` はブラウザーで開いて確認できます。
+
+Linux musl版には、muslの著作権表示・許諾文をまとめた `MUSL_LICENSE` も同梱しています。取得元と更新方法は、ソースリポジトリの [muslのライセンス表示の取得元](https://github.com/inukai-norio/generate_passwd/blob/main/third-party/musl/README.md) に記載しています。
